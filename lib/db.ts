@@ -24,6 +24,12 @@ export async function createEvaluation(role: Role): Promise<string> {
   return data.id as string;
 }
 
+const CONTENT_TYPES: Record<string, string> = {
+  pdf: "application/pdf",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  txt: "text/plain",
+};
+
 export async function uploadResume(
   evaluationId: string,
   filename: string,
@@ -31,9 +37,11 @@ export async function uploadResume(
 ): Promise<string | null> {
   const db = getSupabaseAdmin();
   const path = `${evaluationId}/${Date.now()}-${filename}`;
+  const extension = filename.split(".").pop()?.toLowerCase() ?? "";
+  const contentType = CONTENT_TYPES[extension] ?? "application/octet-stream";
   const { error } = await db.storage
     .from("resumes")
-    .upload(path, buffer, { contentType: "application/pdf" });
+    .upload(path, buffer, { contentType });
 
   if (error) {
     console.error("Resume upload failed:", error.message);

@@ -6,8 +6,8 @@ click Send.
 
 ### Flow
 
-Founder uploads resumes + picks PM/SPM → PDF text extracted → Gemini
-extracts structured candidate data → Gemini scores it against the rubric →
+Founder uploads resumes (PDF, .docx, or .txt) + picks PM/SPM → resume text
+extracted → Gemini extracts structured candidate data → Gemini scores it against the rubric →
 Gemini writes an interview brief + questions → Gemini drafts a candidate
 email → founder reviews the ranked dashboard → founder edits & manually
 sends the email via Resend.

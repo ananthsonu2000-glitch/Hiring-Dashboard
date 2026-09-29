@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { extractPdfText, PdfParseError } from "@/lib/pdf";
+import { extractResumeText, ResumeParseError, detectFileType } from "@/lib/resume-text";
 import { extractCandidateData } from "@/lib/gemini/extract";
 import { scoreCandidate } from "@/lib/gemini/score";
 import { generateInterviewBrief } from "@/lib/gemini/brief";
@@ -69,13 +69,16 @@ export async function POST(req: NextRequest) {
         send({ type: "start", filename, index: i, total: files.length });
 
         try {
-          if (file.size === 0) throw new PdfParseError("Uploaded file is empty.");
-          if (file.size > MAX_FILE_BYTES) throw new PdfParseError("File is too large (max 15MB).");
+          if (!detectFileType(filename)) {
+            throw new ResumeParseError("Unsupported file type. Upload a .pdf, .docx, or .txt resume.");
+          }
+          if (file.size === 0) throw new ResumeParseError("Uploaded file is empty.");
+          if (file.size > MAX_FILE_BYTES) throw new ResumeParseError("File is too large (max 15MB).");
 
           const buffer = Buffer.from(await file.arrayBuffer());
 
           send({ type: "step", filename, step: "Reading CV..." });
-          const resumeText = await extractPdfText(buffer);
+          const resumeText = await extractResumeText(buffer, filename);
 
           send({ type: "step", filename, step: "Extracting candidate details..." });
           const extracted = await extractCandidateData(resumeText);
@@ -130,7 +133,7 @@ export async function POST(req: NextRequest) {
           send({ type: "candidate_done", filename, candidate });
         } catch (err) {
           const errMessage =
-            err instanceof PdfParseError || err instanceof GeminiError
+            err instanceof ResumeParseError || err instanceof GeminiError
               ? err.message
               : `Unexpected error: ${message(err)}`;
 

@@ -35,7 +35,11 @@ export function EvaluationForm() {
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
-    accept: { "application/pdf": [".pdf"] },
+    accept: {
+      "application/pdf": [".pdf"],
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [".docx"],
+      "text/plain": [".txt"],
+    },
     multiple: true,
     disabled: running,
   });
@@ -171,9 +175,11 @@ export function EvaluationForm() {
           <input {...getInputProps()} />
           <UploadCloud className="mx-auto size-7 text-muted-foreground" />
           <p className="mt-3 text-sm font-medium">
-            {isDragActive ? "Drop resumes here" : "Drag & drop resume PDFs, or click to browse"}
+            {isDragActive ? "Drop resumes here" : "Drag & drop resumes, or click to browse"}
           </p>
-          <p className="text-xs text-muted-foreground mt-1">PDF only · multiple candidates supported</p>
+          <p className="text-xs text-muted-foreground mt-1">
+            PDF, Word (.docx), or .txt · multiple candidates supported
+          </p>
         </div>
 
         {files.length > 0 && (
