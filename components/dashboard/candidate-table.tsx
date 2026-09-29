@@ -152,7 +152,7 @@ export function CandidateTable({ candidates }: { candidates: CandidateRecord[] }
               <TableCell className="tabular-nums">
                 {c.total_experience_years != null ? `${c.total_experience_years} yrs` : "—"}
               </TableCell>
-              <TableCell>{c.role_evaluated}</TableCell>
+              <TableCell>{c.role_evaluated ?? "—"}</TableCell>
               <TableCell className={cn("font-medium tabular-nums")}>
                 {c.percentage.toFixed(0)}%
                 <span className="text-muted-foreground font-normal text-xs">

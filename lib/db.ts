@@ -4,6 +4,7 @@ import type {
   CandidateOutputRecord,
   CandidateRecord,
   CandidateScoreRecord,
+  Confidence,
   EmailStatus,
   InterviewBrief,
   Recommendation,
@@ -12,7 +13,7 @@ import type {
   StructuredCandidate,
 } from "@/types";
 
-export async function createEvaluation(role: Role): Promise<string> {
+export async function createEvaluation(role: Role | null): Promise<string> {
   const db = getSupabaseAdmin();
   const { data, error } = await db
     .from("evaluations")
@@ -89,6 +90,7 @@ export async function insertCandidate(params: {
   missing_information: string[];
   risks_concerns: string[];
   pre_screen_notes: string;
+  roleMatch?: { reasoning: string; confidence: Confidence } | null;
 }): Promise<CandidateRecord> {
   const db = getSupabaseAdmin();
   const { data, error } = await db
@@ -103,6 +105,8 @@ export async function insertCandidate(params: {
       resume_filename: params.resumeFilename,
       resume_url: params.resumeUrl,
       role_evaluated: params.role,
+      role_match_reasoning: params.roleMatch?.reasoning ?? null,
+      role_match_confidence: params.roleMatch?.confidence ?? null,
       extracted_data: params.extracted,
       total_experience_years: params.extracted.total_experience_years,
       total_score: params.totals.total_score,
@@ -161,7 +165,7 @@ export async function insertCandidateOutputs(params: {
 
 export async function recordCandidateError(params: {
   evaluationId: string;
-  role: Role;
+  role: Role | null;
   resumeFilename: string;
   error: string;
 }): Promise<void> {

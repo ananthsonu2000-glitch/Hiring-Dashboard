@@ -6,11 +6,12 @@ click Send.
 
 ### Flow
 
-Founder uploads resumes (PDF, .docx, or .txt) + picks PM/SPM → resume text
-extracted → Gemini extracts structured candidate data → Gemini scores it against the rubric →
-Gemini writes an interview brief + questions → Gemini drafts a candidate
-email → founder reviews the ranked dashboard → founder edits & manually
-sends the email via Resend.
+Founder uploads resumes (PDF, .docx, or .txt) + picks PM, SPM, or "let AI
+decide" → resume text extracted → Gemini extracts structured candidate data
+→ (if auto-detect) Gemini decides PM vs SPM per candidate → Gemini scores it
+against the matching rubric → Gemini writes an interview brief + questions →
+Gemini drafts a candidate email → founder reviews the ranked dashboard →
+founder edits & manually sends the email via Resend.
 
 ### Setup
 
@@ -31,7 +32,7 @@ sends the email via Resend.
 - `app/dashboard/[candidateId]/page.tsx` — candidate detail (rubric breakdown, evidence, brief, email)
 - `app/api/evaluate/route.ts` — streams progress while running the 4-step Gemini pipeline per resume and writing results to Supabase
 - `app/api/send-email/route.ts` — sends the (possibly edited) email via Resend, only on explicit request
-- `lib/gemini/` — the 4 Gemini steps: extract → score → brief → email, each with a structured JSON schema
+- `lib/gemini/` — the Gemini steps: extract → (optional) classify-role → score → brief → email, each with a structured JSON schema
 - `lib/rubrics/` — the PM and SPM rubrics + pre-screen patterns, encoded from `rubrics.txt`
 - `lib/db.ts` — all Supabase reads/writes (service-role, server-only)
 - `supabase/migrations/` — database schema

@@ -3,21 +3,45 @@
 import { useCallback, useRef, useState } from "react";
 import { useDropzone } from "react-dropzone";
 import { useRouter } from "next/navigation";
-import { FileText, Loader2, UploadCloud, X, CheckCircle2, AlertTriangle, ArrowRight } from "lucide-react";
+import { FileText, Loader2, UploadCloud, X, CheckCircle2, AlertTriangle, ArrowRight, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import type { EvaluateProgressEvent, Role } from "@/types";
+import type { EvaluateProgressEvent, Role, RoleSelection } from "@/types";
 
 interface FileLog {
   filename: string;
   steps: string[];
   status: "pending" | "processing" | "done" | "error" | "duplicate";
   error?: string;
+  determinedRole?: Role;
+  roleReasoning?: string;
 }
+
+const ROLE_OPTIONS: {
+  value: RoleSelection;
+  title: string;
+  description: string;
+}[] = [
+  {
+    value: "PM",
+    title: "Product Manager",
+    description: "First dedicated PM — building the function from zero",
+  },
+  {
+    value: "SPM",
+    title: "Senior Product Manager",
+    description: "Owns the integration/data layer — most senior PM",
+  },
+  {
+    value: "AUTO",
+    title: "Not sure — let AI decide",
+    description: "Each resume is independently routed to PM or SPM, whichever fits better",
+  },
+];
 
 export function EvaluationForm() {
   const router = useRouter();
-  const [role, setRole] = useState<Role>("PM");
+  const [role, setRole] = useState<RoleSelection>("PM");
   const [files, setFiles] = useState<File[]>([]);
   const [running, setRunning] = useState(false);
   const [logs, setLogs] = useState<Record<string, FileLog>>({});
@@ -118,6 +142,16 @@ export function EvaluationForm() {
       if (event.type === "step") {
         return { ...prev, [key]: { ...existing, status: "processing", steps: [...existing.steps, event.step] } };
       }
+      if (event.type === "role_determined") {
+        return {
+          ...prev,
+          [key]: {
+            ...existing,
+            determinedRole: event.roleMatch.role,
+            roleReasoning: event.roleMatch.reasoning,
+          },
+        };
+      }
       if (event.type === "candidate_done") {
         return { ...prev, [key]: { ...existing, status: "done" } };
       }
@@ -137,25 +171,26 @@ export function EvaluationForm() {
     <div className="space-y-8">
       <section className="space-y-3">
         <h2 className="text-sm font-medium text-muted-foreground">1. Hiring Role</h2>
-        <div className="flex gap-3">
-          {(["PM", "SPM"] as const).map((r) => (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {ROLE_OPTIONS.map((opt) => (
             <button
-              key={r}
+              key={opt.value}
               type="button"
               disabled={running}
-              onClick={() => setRole(r)}
+              onClick={() => setRole(opt.value)}
               className={cn(
-                "flex-1 rounded-xl border px-6 py-4 text-left transition-all disabled:opacity-60",
-                role === r
+                "flex-1 rounded-xl border px-5 py-4 text-left transition-all disabled:opacity-60",
+                role === opt.value
                   ? "border-foreground bg-foreground text-background shadow-sm"
                   : "border-border bg-white hover:border-foreground/40"
               )}
             >
-              <div className="font-semibold">{r === "PM" ? "Product Manager" : "Senior Product Manager"}</div>
-              <div className={cn("text-xs mt-0.5", role === r ? "text-background/70" : "text-muted-foreground")}>
-                {r === "PM"
-                  ? "First dedicated PM — building the function from zero"
-                  : "Owns the integration/data layer — most senior PM"}
+              <div className="font-semibold flex items-center gap-1.5">
+                {opt.value === "AUTO" && <Sparkles className="size-3.5 shrink-0" />}
+                {opt.title}
+              </div>
+              <div className={cn("text-xs mt-0.5", role === opt.value ? "text-background/70" : "text-muted-foreground")}>
+                {opt.description}
               </div>
             </button>
           ))}
@@ -226,9 +261,19 @@ export function EvaluationForm() {
                     <AlertTriangle className="size-4 text-amber-600" />
                   )}
                   <span className="truncate">{log.filename}</span>
+                  {log.determinedRole && (
+                    <span className="ml-auto shrink-0 text-xs font-medium px-1.5 py-0.5 rounded bg-muted text-foreground">
+                      {log.determinedRole}
+                    </span>
+                  )}
                 </div>
                 {log.steps.length > 0 && (
                   <p className="text-xs text-muted-foreground mt-1 ml-6">{log.steps[log.steps.length - 1]}</p>
+                )}
+                {log.status === "done" && log.roleReasoning && (
+                  <p className="text-xs text-muted-foreground mt-1 ml-6">
+                    Routed to {log.determinedRole}: {log.roleReasoning}
+                  </p>
                 )}
                 {log.error && <p className="text-xs text-amber-700 mt-1 ml-6">{log.error}</p>}
               </li>
@@ -240,7 +285,8 @@ export function EvaluationForm() {
       {doneCount !== null && evaluationId && (
         <div className="rounded-lg border bg-emerald-50 border-emerald-200 px-4 py-3.5 flex items-center justify-between gap-3">
           <p className="text-sm text-emerald-900">
-            Evaluated {doneCount} candidate{doneCount === 1 ? "" : "s"} for {role}.
+            Evaluated {doneCount} candidate{doneCount === 1 ? "" : "s"}
+            {role === "AUTO" ? " (role auto-detected per candidate)." : ` for ${role}.`}
           </p>
           <Button variant="outline" size="sm" onClick={() => router.push("/dashboard")}>
             View Dashboard <ArrowRight className="size-4" />

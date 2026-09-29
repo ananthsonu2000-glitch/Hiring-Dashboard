@@ -50,7 +50,7 @@ export default async function CandidateDetailPage({
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-2 border-t">
-          <Stat label="Applied Role" value={candidate.role_evaluated} />
+          <Stat label="Applied Role" value={candidate.role_evaluated ?? "—"} />
           <Stat
             label="Score"
             value={`${candidate.total_score}/${candidate.max_score}`}
@@ -88,6 +88,16 @@ export default async function CandidateDetailPage({
               />
             </dl>
           </Section>
+          {candidate.role_match_reasoning && (
+            <Section title={`Why ${candidate.role_evaluated}?`}>
+              <p className="text-sm">{candidate.role_match_reasoning}</p>
+              {candidate.role_match_confidence && (
+                <p className="text-xs text-muted-foreground mt-2">
+                  Role-fit confidence: {candidate.role_match_confidence}
+                </p>
+              )}
+            </Section>
+          )}
           <Section title="Pre-Screen Notes">
             <p className="text-sm">{candidate.pre_screen_notes || "Not evaluated."}</p>
           </Section>

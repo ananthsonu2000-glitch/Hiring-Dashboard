@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { extractResumeText, ResumeParseError, detectFileType } from "@/lib/resume-text";
 import { extractCandidateData } from "@/lib/gemini/extract";
+import { classifyRole } from "@/lib/gemini/classify-role";
 import { scoreCandidate } from "@/lib/gemini/score";
 import { generateInterviewBrief } from "@/lib/gemini/brief";
 import { generateEmail } from "@/lib/gemini/email";
@@ -16,7 +17,7 @@ import {
   rerankEvaluation,
   uploadResume,
 } from "@/lib/db";
-import type { EvaluateProgressEvent, Role } from "@/types";
+import type { EvaluateProgressEvent, RoleSelection } from "@/types";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -27,11 +28,11 @@ const COMPANY_NAME = process.env.COMPANY_NAME || "Kargo";
 
 export async function POST(req: NextRequest) {
   const formData = await req.formData();
-  const role = formData.get("role") as Role | null;
+  const roleSelection = formData.get("role") as RoleSelection | null;
   const files = formData.getAll("files").filter((f): f is File => f instanceof File);
 
-  if (role !== "PM" && role !== "SPM") {
-    return Response.json({ error: "role must be PM or SPM" }, { status: 400 });
+  if (roleSelection !== "PM" && roleSelection !== "SPM" && roleSelection !== "AUTO") {
+    return Response.json({ error: "role must be PM, SPM, or AUTO" }, { status: 400 });
   }
   if (files.length === 0) {
     return Response.json({ error: "No files uploaded" }, { status: 400 });
@@ -50,7 +51,7 @@ export async function POST(req: NextRequest) {
 
       let evaluationId: string;
       try {
-        evaluationId = await createEvaluation(role);
+        evaluationId = await createEvaluation(roleSelection === "AUTO" ? null : roleSelection);
       } catch (err) {
         send({
           type: "candidate_error",
@@ -67,6 +68,8 @@ export async function POST(req: NextRequest) {
         const file = files[i];
         const filename = file.name;
         send({ type: "start", filename, index: i, total: files.length });
+
+        let role: "PM" | "SPM" | null = roleSelection === "AUTO" ? null : roleSelection;
 
         try {
           if (!detectFileType(filename)) {
@@ -91,6 +94,17 @@ export async function POST(req: NextRequest) {
               message: `A candidate with email "${extracted.email}" was already processed in this batch — skipped.`,
             });
             continue;
+          }
+
+          let roleMatch: { reasoning: string; confidence: "High" | "Medium" | "Low" } | null = null;
+          if (roleSelection === "AUTO") {
+            send({ type: "step", filename, step: "Determining best-fit role (PM or SPM)..." });
+            const match = await classifyRole(extracted);
+            role = match.role;
+            roleMatch = { reasoning: match.reasoning, confidence: match.confidence };
+            send({ type: "role_determined", filename, roleMatch: match });
+          } else {
+            role = roleSelection;
           }
 
           send({ type: "step", filename, step: `Scoring against ${role} rubric...` });
@@ -119,6 +133,7 @@ export async function POST(req: NextRequest) {
             missing_information: scoring.missing_information,
             risks_concerns: scoring.risks_concerns,
             pre_screen_notes: scoring.pre_screen_notes,
+            roleMatch,
           });
 
           await insertCandidateScores(candidate.id, scoring.scores);

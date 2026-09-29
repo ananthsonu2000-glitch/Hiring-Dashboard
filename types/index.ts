@@ -1,5 +1,8 @@
 export type Role = "PM" | "SPM";
 
+/** What the founder picks on the upload form: a fixed role, or auto-detect per candidate. */
+export type RoleSelection = Role | "AUTO";
+
 export type Recommendation =
   | "Strong Interview"
   | "Interview"
@@ -62,6 +65,12 @@ export interface ScoringResult {
   pre_screen_notes: string;
 }
 
+export interface RoleMatch {
+  role: Role;
+  confidence: Confidence;
+  reasoning: string;
+}
+
 export interface InterviewBrief {
   candidate_summary: string;
   why_worth_interviewing: string;
@@ -84,7 +93,9 @@ export interface CandidateRecord {
   current_title: string | null;
   current_company: string | null;
   resume_filename: string;
-  role_evaluated: Role;
+  role_evaluated: Role | null;
+  role_match_reasoning: string | null;
+  role_match_confidence: Confidence | null;
   extracted_data: StructuredCandidate;
   total_experience_years: number | null;
   total_score: number;
@@ -118,7 +129,7 @@ export interface CandidateOutputRecord {
 
 export interface EvaluationRecord {
   id: string;
-  role: Role;
+  role: Role | null;
   created_at: string;
 }
 
@@ -126,6 +137,7 @@ export interface EvaluationRecord {
 export type EvaluateProgressEvent =
   | { type: "start"; filename: string; index: number; total: number }
   | { type: "step"; filename: string; step: string }
+  | { type: "role_determined"; filename: string; roleMatch: RoleMatch }
   | { type: "candidate_done"; filename: string; candidate: CandidateRecord }
   | { type: "candidate_error"; filename: string; error: string }
   | { type: "duplicate"; filename: string; message: string }
