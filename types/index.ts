@@ -133,12 +133,16 @@ export interface EvaluationRecord {
   created_at: string;
 }
 
-/** Progress events streamed from /api/evaluate while processing each resume. */
+/**
+ * Progress events streamed from /api/evaluate, which processes one resume
+ * per request. "evaluation_ready" always arrives first and carries the
+ * evaluationId to reuse on subsequent per-file requests in the same batch.
+ */
 export type EvaluateProgressEvent =
-  | { type: "start"; filename: string; index: number; total: number }
+  | { type: "evaluation_ready"; evaluationId: string }
+  | { type: "start"; filename: string }
   | { type: "step"; filename: string; step: string }
   | { type: "role_determined"; filename: string; roleMatch: RoleMatch }
   | { type: "candidate_done"; filename: string; candidate: CandidateRecord }
   | { type: "candidate_error"; filename: string; error: string }
-  | { type: "duplicate"; filename: string; message: string }
-  | { type: "all_done"; evaluationId: string; count: number };
+  | { type: "duplicate"; filename: string; message: string };

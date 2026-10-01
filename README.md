@@ -30,7 +30,8 @@ founder edits & manually sends the email via Resend.
 - `app/page.tsx` — New Evaluation (role select, resume upload, live processing log)
 - `app/dashboard/page.tsx` — ranked candidate table with stats
 - `app/dashboard/[candidateId]/page.tsx` — candidate detail (rubric breakdown, evidence, brief, email)
-- `app/api/evaluate/route.ts` — streams progress while running the 4-step Gemini pipeline per resume and writing results to Supabase
+- `app/api/evaluate/route.ts` — streams progress while running the Gemini pipeline for one resume and writing the result to Supabase. The upload form calls this once per file, sequentially, reusing the returned `evaluationId` — this keeps every request body small (one resume, not a whole batch) so it never hits request-body-size limits
+- `app/api/evaluate/finalize/route.ts` — called once after the whole batch finishes, to rank candidates within that evaluation
 - `app/api/send-email/route.ts` — sends the (possibly edited) email via Resend, only on explicit request
 - `lib/gemini/` — the Gemini steps: extract → (optional) classify-role → score → brief → email, each with a structured JSON schema
 - `lib/rubrics/` — the PM and SPM rubrics + pre-screen patterns, encoded from `rubrics.txt`

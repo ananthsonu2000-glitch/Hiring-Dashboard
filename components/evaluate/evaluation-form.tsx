@@ -17,6 +17,8 @@ interface FileLog {
   roleReasoning?: string;
 }
 
+const MAX_FILES = 50;
+
 const ROLE_OPTIONS: {
   value: RoleSelection;
   title: string;
@@ -75,6 +77,11 @@ export function EvaluationForm() {
 
   async function handleEvaluate() {
     if (files.length === 0) return;
+    if (files.length > MAX_FILES) {
+      setRequestError(`Upload at most ${MAX_FILES} resumes at a time — you have ${files.length} queued.`);
+      return;
+    }
+
     setRunning(true);
     setDoneCount(null);
     setEvaluationId(null);
@@ -82,53 +89,92 @@ export function EvaluationForm() {
     setLogOrder([]);
     setLogs({});
 
-    const formData = new FormData();
-    formData.append("role", role);
-    files.forEach((f) => formData.append("files", f));
+    let currentEvaluationId: string | null = null;
+    let successCount = 0;
 
-    try {
-      const res = await fetch("/api/evaluate", { method: "POST", body: formData });
+    // One request per resume, sent sequentially: this keeps every request
+    // body small (a single file, never a whole batch) so it can't run into
+    // request-body-size limits no matter how many resumes are uploaded.
+    for (const file of files) {
+      const formData = new FormData();
+      formData.append("role", role);
+      formData.append("file", file);
+      if (currentEvaluationId) formData.append("evaluationId", currentEvaluationId);
 
-      if (!res.ok) {
-        const body = await res.json().catch(() => null);
-        throw new Error(body?.error || `Request failed (${res.status}).`);
-      }
-      if (!res.body) throw new Error("No response stream from server.");
+      try {
+        const res = await fetch("/api/evaluate", { method: "POST", body: formData });
 
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-
-        const lines = buffer.split("\n");
-        buffer = lines.pop() ?? "";
-
-        for (const line of lines) {
-          if (!line.trim()) continue;
-          const event = JSON.parse(line) as EvaluateProgressEvent;
-          applyEvent(event);
+        if (!res.ok) {
+          const body = await res.json().catch(() => null);
+          throw new Error(body?.error || `Request failed (${res.status}).`);
         }
+        if (!res.body) throw new Error("No response stream from server.");
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        const handleLine = (line: string) => {
+          const event = JSON.parse(line) as EvaluateProgressEvent;
+          if (event.type === "evaluation_ready") {
+            currentEvaluationId = event.evaluationId;
+            return;
+          }
+          if (event.type === "candidate_done") successCount++;
+          applyEvent(event);
+        };
+
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+
+          const lines = buffer.split("\n");
+          buffer = lines.pop() ?? "";
+
+          for (const line of lines) {
+            if (line.trim()) handleLine(line);
+          }
+        }
+        if (buffer.trim()) handleLine(buffer);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Something went wrong.";
+
+        if (!currentEvaluationId) {
+          // Failed before a batch even started — almost certainly a config
+          // or validation problem that would repeat for every remaining
+          // file, so stop instead of retrying the whole queue.
+          setRequestError(msg);
+          break;
+        }
+
+        setLogOrder((prev) => (prev.includes(file.name) ? prev : [...prev, file.name]));
+        setLogs((prev) => ({
+          ...prev,
+          [file.name]: { filename: file.name, steps: prev[file.name]?.steps ?? [], status: "error", error: msg },
+        }));
       }
-      if (buffer.trim()) {
-        applyEvent(JSON.parse(buffer) as EvaluateProgressEvent);
-      }
-    } catch (err) {
-      setRequestError(err instanceof Error ? err.message : "Something went wrong.");
-    } finally {
-      setRunning(false);
     }
+
+    if (currentEvaluationId) {
+      try {
+        await fetch("/api/evaluate/finalize", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ evaluationId: currentEvaluationId }),
+        });
+      } catch {
+        // best-effort; candidates are saved either way, ranks just won't be set
+      }
+    }
+
+    setEvaluationId(currentEvaluationId);
+    setDoneCount(successCount);
+    setRunning(false);
   }
 
   function applyEvent(event: EvaluateProgressEvent) {
-    if (event.type === "all_done") {
-      setEvaluationId(event.evaluationId);
-      setDoneCount(event.count);
-      return;
-    }
+    if (event.type === "evaluation_ready") return;
 
     setLogOrder((prev) => (prev.includes(event.filename) ? prev : [...prev, event.filename]));
 
@@ -264,7 +310,9 @@ export function EvaluationForm() {
 
       {orderedLogs.length > 0 && (
         <section className="space-y-3">
-          <h2 className="text-sm font-medium text-muted-foreground">Processing</h2>
+          <h2 className="text-sm font-medium text-muted-foreground">
+            Processing{running ? ` (${orderedLogs.length} of ${files.length})` : ""}
+          </h2>
           <ul className="space-y-2">
             {orderedLogs.map((log) => (
               <li key={log.filename} className="rounded-lg border bg-white px-4 py-3">
