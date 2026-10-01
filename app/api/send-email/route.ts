@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { Resend } from "resend";
+import { sendEmail, EmailConfigError } from "@/lib/email";
 import { getCandidateDetail, updateEmailDraft, updateEmailStatus } from "@/lib/db";
 
 export const runtime = "nodejs";
@@ -31,34 +31,14 @@ export async function POST(req: NextRequest) {
   // Persist any founder edits made just before sending.
   await updateEmailDraft(candidateId, subject, emailBody);
 
-  const apiKey = process.env.RESEND_API_KEY;
-  const fromEmail = process.env.FROM_EMAIL;
-  if (!apiKey || !fromEmail) {
-    return Response.json(
-      { error: "Email sending is not configured (RESEND_API_KEY / FROM_EMAIL missing)." },
-      { status: 500 }
-    );
-  }
-
   try {
-    const resend = new Resend(apiKey);
-    const { error } = await resend.emails.send({
-      from: fromEmail,
-      to: detail.candidate.email,
-      subject,
-      text: emailBody,
-    });
-
-    if (error) {
-      await updateEmailStatus(candidateId, "failed");
-      return Response.json({ error: error.message }, { status: 502 });
-    }
-
+    await sendEmail({ to: detail.candidate.email, subject, text: emailBody });
     await updateEmailStatus(candidateId, "sent");
     return Response.json({ success: true });
   } catch (err) {
     await updateEmailStatus(candidateId, "failed");
+    const status = err instanceof EmailConfigError ? 500 : 502;
     const errMessage = err instanceof Error ? err.message : "Failed to send email";
-    return Response.json({ error: errMessage }, { status: 502 });
+    return Response.json({ error: errMessage }, { status });
   }
 }

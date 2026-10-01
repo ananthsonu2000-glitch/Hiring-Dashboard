@@ -1,7 +1,7 @@
 ## Hiring Dashboard
 
 Upload PM/SPM candidate resumes, score them against a rubric using Gemini,
-rank them, and send personalized outreach through Resend — only when you
+rank them, and send personalized outreach via Gmail SMTP — only when you
 click Send.
 
 ### Flow
@@ -11,16 +11,19 @@ decide" → resume text extracted → Gemini extracts structured candidate data
 → (if auto-detect) Gemini decides PM vs SPM per candidate → Gemini scores it
 against the matching rubric → Gemini writes an interview brief + questions →
 Gemini drafts a candidate email → founder reviews the ranked dashboard →
-founder edits & manually sends the email via Resend.
+founder edits & manually sends the email via Gmail SMTP.
 
 ### Setup
 
 1. **Supabase** — create a project, then run [`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql)
-   in the SQL editor. It creates the `evaluations`, `candidates`,
+   and [`supabase/migrations/0002_role_detection.sql`](supabase/migrations/0002_role_detection.sql)
+   in the SQL editor. They create the `evaluations`, `candidates`,
    `candidate_scores`, `candidate_outputs` tables and a private `resumes`
    storage bucket.
 2. **Gemini** — grab an API key from [Google AI Studio](https://aistudio.google.com/apikey).
-3. **Resend** — grab an API key and verify a sending domain/address.
+3. **Email** — generate a Google Account App Password for the Gmail (or
+   Google Workspace) address you want to send from: [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords)
+   (requires 2-Step Verification to be turned on first).
 4. Copy `.env.example` to `.env.local` and fill in the values.
 5. `npm install`
 6. `npm run dev` — app runs at http://localhost:3000
@@ -32,7 +35,8 @@ founder edits & manually sends the email via Resend.
 - `app/dashboard/[candidateId]/page.tsx` — candidate detail (rubric breakdown, evidence, brief, email)
 - `app/api/evaluate/route.ts` — streams progress while running the Gemini pipeline for one resume and writing the result to Supabase. The upload form calls this once per file, sequentially, reusing the returned `evaluationId` — this keeps every request body small (one resume, not a whole batch) so it never hits request-body-size limits
 - `app/api/evaluate/finalize/route.ts` — called once after the whole batch finishes, to rank candidates within that evaluation
-- `app/api/send-email/route.ts` — sends the (possibly edited) email via Resend, only on explicit request
+- `app/api/send-email/route.ts` — sends the (possibly edited) email via Gmail SMTP, only on explicit request
+- `lib/email.ts` — the Gmail SMTP transport (nodemailer), configured via `EMAIL_USER` / `EMAIL_APP_PASSWORD`
 - `lib/gemini/` — the Gemini steps: extract → (optional) classify-role → score → brief → email, each with a structured JSON schema
 - `lib/rubrics/` — the PM and SPM rubrics + pre-screen patterns, encoded from `rubrics.txt`
 - `lib/db.ts` — all Supabase reads/writes (service-role, server-only)
