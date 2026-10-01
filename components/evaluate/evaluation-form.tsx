@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import { useDropzone } from "react-dropzone";
 import { useRouter } from "next/navigation";
 import { FileText, Loader2, UploadCloud, X, CheckCircle2, AlertTriangle, ArrowRight, Sparkles } from "lucide-react";
@@ -47,7 +47,8 @@ export function EvaluationForm() {
   const [logs, setLogs] = useState<Record<string, FileLog>>({});
   const [evaluationId, setEvaluationId] = useState<string | null>(null);
   const [doneCount, setDoneCount] = useState<number | null>(null);
-  const logOrder = useRef<string[]>([]);
+  const [requestError, setRequestError] = useState<string | null>(null);
+  const [logOrder, setLogOrder] = useState<string[]>([]);
 
   const onDrop = useCallback((accepted: File[]) => {
     setFiles((prev) => {
@@ -77,7 +78,8 @@ export function EvaluationForm() {
     setRunning(true);
     setDoneCount(null);
     setEvaluationId(null);
-    logOrder.current = [];
+    setRequestError(null);
+    setLogOrder([]);
     setLogs({});
 
     const formData = new FormData();
@@ -86,6 +88,11 @@ export function EvaluationForm() {
 
     try {
       const res = await fetch("/api/evaluate", { method: "POST", body: formData });
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.error || `Request failed (${res.status}).`);
+      }
       if (!res.body) throw new Error("No response stream from server.");
 
       const reader = res.body.getReader();
@@ -110,15 +117,7 @@ export function EvaluationForm() {
         applyEvent(JSON.parse(buffer) as EvaluateProgressEvent);
       }
     } catch (err) {
-      setLogs((prev) => ({
-        ...prev,
-        __global__: {
-          filename: "__global__",
-          steps: [],
-          status: "error",
-          error: err instanceof Error ? err.message : "Something went wrong.",
-        },
-      }));
+      setRequestError(err instanceof Error ? err.message : "Something went wrong.");
     } finally {
       setRunning(false);
     }
@@ -131,9 +130,10 @@ export function EvaluationForm() {
       return;
     }
 
+    setLogOrder((prev) => (prev.includes(event.filename) ? prev : [...prev, event.filename]));
+
     setLogs((prev) => {
       const key = event.filename;
-      if (!logOrder.current.includes(key)) logOrder.current.push(key);
       const existing: FileLog = prev[key] ?? { filename: key, steps: [], status: "pending" };
 
       if (event.type === "start") {
@@ -165,7 +165,7 @@ export function EvaluationForm() {
     });
   }
 
-  const orderedLogs = logOrder.current.map((k) => logs[k]).filter(Boolean);
+  const orderedLogs = logOrder.map((k) => logs[k]).filter(Boolean);
 
   return (
     <div className="space-y-8">
@@ -243,10 +243,24 @@ export function EvaluationForm() {
         )}
       </section>
 
-      <Button size="lg" disabled={files.length === 0 || running} onClick={handleEvaluate} className="w-full sm:w-auto">
-        {running ? <Loader2 className="animate-spin" /> : null}
-        {running ? "Evaluating Candidates..." : "Evaluate Candidates"}
-      </Button>
+      <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+        <Button size="lg" disabled={files.length === 0 || running} onClick={handleEvaluate} className="w-full sm:w-auto">
+          {running ? <Loader2 className="animate-spin" /> : null}
+          {running ? "Evaluating Candidates..." : "Evaluate Candidates"}
+        </Button>
+        {files.length > 5 && !running && (
+          <p className="text-xs text-muted-foreground">
+            {files.length} resumes — each goes through several AI steps, so this can take a few minutes. Keep this tab open.
+          </p>
+        )}
+      </div>
+
+      {requestError && (
+        <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900 flex items-start gap-2">
+          <AlertTriangle className="size-4 shrink-0 mt-0.5" />
+          <span>{requestError}</span>
+        </div>
+      )}
 
       {orderedLogs.length > 0 && (
         <section className="space-y-3">

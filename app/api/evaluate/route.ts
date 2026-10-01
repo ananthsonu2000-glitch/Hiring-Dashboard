@@ -22,7 +22,7 @@ import type { EvaluateProgressEvent, RoleSelection } from "@/types";
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
-const MAX_FILES = 20;
+const MAX_FILES = 50;
 const MAX_FILE_BYTES = 15 * 1024 * 1024;
 const COMPANY_NAME = process.env.COMPANY_NAME || "Kargo";
 
